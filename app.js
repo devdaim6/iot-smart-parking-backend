@@ -1,5 +1,6 @@
 const express = require('express');
 const { createServer } = require('http');
+const WebSocket = require('ws');
 const { Server } = require('socket.io');
 const dotenv = require('dotenv');
 const cors = require('cors');
@@ -12,15 +13,19 @@ const User = require('./models/user.model');
 dotenv.config();
 
 const app = express();
-const httpServer = createServer(app);
-const io = new Server(httpServer, {
+const server = createServer(app);
+const wss = new WebSocket.Server({ server }); // For sensors
+const io = new Server(server, {  // For client
   cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
+    origin: process.env.CLIENT_URL || "http://localhost:3000",
+    credentials: true
   }
-});
+}); 
 
-app.use(cors());
+app.use(cors({
+  origin: process.env.CLIENT_URL || "http://localhost:3000",
+  credentials: true
+}));
 app.use(express.json());
 
 connectDB();
@@ -42,32 +47,69 @@ app.use((err, req, res, next) => {
 });
 
 // WebSocket logic
-const parkingSlots = {
-  slot1: false,
-  slot2: false,
-  slot3: false,
-  slot4: false
-};
+let parkingSlots = {};
 
+// Initialize parking slots from database
+async function initializeParkingSlots() {
+  try {
+    const slots = await Slot.find({});
+    slots.forEach(slot => {
+      parkingSlots[slot.sensorId] = {
+        occupied: slot.isParked,
+        lastUpdated: slot.lastUpdated,
+        status: slot.status,
+        bookedBy: slot.bookedBy,
+        vehicleNumber: slot.vehicleNumber
+      };
+    });
+  } catch (error) {
+    console.error('Error initializing parking slots:', error);
+  }
+}
+
+// Call initialization on startup
+initializeParkingSlots();
+
+// Socket.IO connection handling for clients
 io.on('connection', (socket) => {
-  console.log('Client connected:', socket.id);
-  socket.emit('parkingStatus', parkingSlots);
+  console.log('Client connected via Socket.IO');
+  
+  // Send initial state to client
+  socket.emit('INITIAL_STATE', { slots: parkingSlots });
+});
 
-  socket.on('sensorData', async (data) => {
+// WebSocket connection handling for sensors
+wss.on('connection', (ws) => {
+  console.log('Sensor connected via WebSocket');
+
+  ws.on('message', async (message) => {
     try {
-      const { sensorId, occupied } = data;
-      const slot = await Slot.findOne({ sensorId });
+      // Ensure message is a string before parsing
+      const messageStr = message.toString();
+      const data = JSON.parse(messageStr);
+      console.log('Received sensor data:', data);
+
+      // Forward raw sensor data to frontend
+      io.emit('SENSOR_DATA', data);
+
+      // Handle Arduino sensor data
+      const { slotId, isOccupied } = data;
+      const slot = await Slot.findOne({ sensorId: slotId });
+      
       if (!slot) {
-        console.warn(`No slot found for sensor ${sensorId}`);
+        console.warn(`No slot found for sensor ${slotId}`);
         return;
       }
 
       const previousStatus = slot.status;
-      if (occupied) {
+      if (isOccupied) {
         if (!slot.bookedBy) {
-          socket.emit('parkingError', {
+          const errorMsg = {
+            type: 'PARKING_ERROR',
             message: 'This slot is not booked. Please book a slot before parking your car.'
-          });
+          };
+          ws.send(JSON.stringify(errorMsg));
+          io.emit('PARKING_ERROR', errorMsg);
           return;
         }
 
@@ -103,28 +145,54 @@ io.on('connection', (socket) => {
       slot.lastUpdated = new Date();
       await slot.save();
 
+      // Update local parking slots state
+      parkingSlots[slotId] = {
+        occupied: isOccupied,
+        lastUpdated: new Date(),
+        status: slot.status,
+        bookedBy: slot.bookedBy,
+        vehicleNumber: slot.vehicleNumber
+      };
+
       if (previousStatus !== slot.status) {
-        io.emit('parkingStatus', parkingSlots);
+        broadcastStatus();
       }
+
     } catch (error) {
-      console.error('Error handling sensor data:', error);
+      console.error('Message handling error:', error);
+      io.emit('ERROR', { message: 'Message handling error', error: error.message });
     }
-  });
-
-  socket.on('servoControl', (command) => {
-    console.log('Servo control command:', command);
-    io.emit('deviceCommand', {
-      type: 'servo',
-      command: command
-    });
-  });
-
-  socket.on('disconnect', () => {
-    console.log('Client disconnected:', socket.id);
   });
 });
 
+function broadcastStatus() {
+  const status = {
+    type: 'PARKING_UPDATE',
+    slots: parkingSlots,
+    availableSlots: Object.values(parkingSlots)
+      .filter(slot => slot.status === 'available').length
+  };
+
+  // Broadcast to WebSocket clients (sensors)
+  wss.clients.forEach((client) => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(JSON.stringify(status));
+    }
+  });
+
+  // Broadcast to Socket.IO clients
+  io.emit('PARKING_UPDATE', status);
+}
+
+function broadcastToArduino(data) {
+  wss.clients.forEach((client) => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(JSON.stringify(data));
+    }
+  });
+}
+
 const PORT = process.env.PORT || 5000;
-httpServer.listen(PORT, '0.0.0.0', () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server is running on port ${PORT}`);
 });
