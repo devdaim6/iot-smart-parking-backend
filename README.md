@@ -1,122 +1,169 @@
-# IoT Backend Project
+# IoT Smart Parking System
 
 ## Overview
+The IoT Smart Parking System is a modern solution that combines IoT sensors, real-time monitoring, and user management to create an efficient parking management system. The system uses WebSocket technology for real-time communication between sensors and clients, providing instant updates on parking slot availability and status changes. The system is hosted on Microsoft Azure Virtual Machine for reliable cloud infrastructure.
 
-This project is an IoT backend service designed to manage and process data from IoT devices. It includes features for handling MQTT communication, logging, and managing device slots. The backend is built using Node.js and TypeScript, ensuring a robust and scalable architecture.
+![IoT Parking System](iot-parking.png)
 
-## Table of Contents
+## Features
+- **Real-time Monitoring**: Live updates of parking slot status using WebSocket
+- **User Authentication**: Secure JWT-based authentication system
+- **Slot Management**: Advanced booking and management of parking slots
+- **IoT Integration**: Direct communication with IoT sensors
+- **Automated Status Updates**: Real-time updates of slot occupancy
+- **Vehicle Tracking**: Track vehicles and their parking status
+- **Logging System**: Comprehensive system logging for monitoring and debugging
+- **Cloud Hosting**: Deployed on Microsoft Azure VM for scalability and reliability
 
-- [Installation](#installation)
+## Technology Stack
+- **Backend**: Node.js, Express.js
+- **Database**: MongoDB with Mongoose ODM
+- **Real-time Communication**: WebSocket (ws) & Socket.IO
+- **Authentication**: JWT (JSON Web Tokens)
+- **Logging**: Winston Logger
+- **Security**: CORS, Environment Variables
+- **Cloud Platform**: Microsoft Azure Virtual Machine
 
-- [Configuration](#configuration)
-
-- [Usage](#usage)
-
-- [API Documentation](#api-documentation)
-
-- [Features](#features)
-
-- [Contributing](#contributing)
-
-- [License](#license)
-
-- [Contact](#contact)
+## System Architecture
+The system consists of three main components:
+1. **IoT Sensors**: Connected via WebSocket for real-time status updates
+2. **Backend Server**: Handles business logic and data management, hosted on Azure VM
+3. **Client Applications**: Receive real-time updates via Socket.IO
 
 ## Installation
 
-To get started with the project, follow these steps:
+### Prerequisites
+- Node.js (v16.20.1 or higher)
+- MongoDB
+- npm or yarn package manager
+- Microsoft Azure account (for deployment)
 
-1. **Clone the repository:**
-
+### Setup Steps
+1. Clone the repository:
    ```bash
-
-   git clone https://github.com/yourusername/iot-backend.git
-
-   cd iot-backend
-
+   git clone https://github.com/devdaim6/iot-smart-parking-backend.git
+   cd iot-smart-parking
    ```
 
-2. **Install dependencies:**
-
-   Ensure you have Node.js installed, then run:
-
+2. Install dependencies:
    ```bash
-
    npm install
-
    ```
 
-3. **Set up environment variables:**
+3. Create a `.env` file in the root directory with the following configurations:
+   ```env
+   # MongoDB
+   MONGO_URI=your_mongodb_connection_string
 
-   Create a `.env` file in the root directory and configure the necessary environment variables. Refer to the `.env.example` file for guidance.
+   # JWT
+   JWT_SECRET=your_jwt_secret_key
+   JWT_EXPIRES_IN=90d
 
-## Configuration
+   # Server
+   PORT=5000
 
-- **MQTT Service:** Configure the MQTT broker settings in `services/mqtt.service.js`.
+   # Client
+   CLIENT_URL=http://localhost:3000
+   ```
 
-- **Logging:** Adjust logging settings in `utils/logger.js`.
+4. Start the server:
+   ```bash
+   # Development mode
+   npm run dev
 
-- **Database:** Ensure your database is set up and configured in `models/slot.model.js`.
-
-## Usage
-
-To start the server, run:
-
-```bash
-
-npm start
-
-```
-
-The server will start on the port specified in your `.env` file.
+   # Production mode
+   npm run prod
+   ```
 
 ## API Documentation
 
-### Slot Management
+### Authentication Endpoints
+```http
+POST /api/auth/register
+POST /api/auth/login
+```
 
-- **GET /api/slots**: Retrieve all slots (requires authentication).
+### Parking Slot Endpoints
+```http
+GET /api/slots
+GET /api/slots/available
+POST /api/slots/book
+POST /api/slots/release
+```
 
-- **GET /api/slots/available**: Get available slots (requires authentication).
+### WebSocket Events
+```javascript
+// Sensor Events
+'sensorData' - Receives sensor status updates
+'PARKING_UPDATE' - Broadcasts parking status changes
+'INITIAL_STATE' - Sends initial parking state to clients
 
-- **POST /api/slots/book**: Book a slot (requires authentication).
+// Error Events
+'PARKING_ERROR' - Broadcasts parking-related errors
+'ERROR' - General error broadcasts
+```
 
-### Auth Management
+## Database Schema
 
-- **POST /api/auth/register**: Register a new user.
+### User Model
+- Username
+- Password (hashed)
+- Mobile number
+- Vehicle number
+- Role (user/admin)
+- Parking status
+- Booking history
 
-- **POST /api/auth/login**: Login with existing user credentials.
+### Slot Model
+- Slot number
+- Status (available/occupied/parked)
+- Sensor ID
+- Booking information
+- Vehicle information
+- Timestamp data
 
-### MQTT Communication
+## Security Features
+- JWT Authentication
+- Password Hashing
+- CORS Protection
+- Environment Variable Security
+- Error Handling Middleware
+- Input Validation
 
-- **Endpoint**: Details on how to connect and communicate with the MQTT broker.
+## Logging
+The system uses Winston logger for comprehensive logging:
+- Error logs: `error.log`
+- Combined logs: `combined.log`
 
-### Logging
+## Error Handling
+The system implements a centralized error handling mechanism with:
+- Custom error classes
+- HTTP status codes
+- Operational vs Programming errors
+- Error logging
 
-- **Logs**: Access logs are stored in `combined.log` and error logs in `error.log`.
+## Development
+To contribute to the project:
+1. Fork the repository
+2. Create a feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
 
-## Features
+## Production Deployment
+1. Set up environment variables
+2. Configure MongoDB connection
+3. Set up SSL/TLS certificates
+4. Configure CORS settings
+5. Enable production logging
+6. Deploy using PM2 or similar process manager
 
-- **MQTT Communication:** Efficient handling of MQTT messages for IoT devices.
+## License
+This project is licensed under the MIT License - see the LICENSE file for details.
 
-- **Logging:** Comprehensive logging using `combined.log` and `error.log`.
+## Support
+For support, email [daimdev6+iot+support@gmail.com](mailto:daimdev6+iot+support@gmail.com)
 
-- **Slot Management:** Manage device slots with CRUD operations.
+## Contributors
+- [Daim Zahoor](https://github.com/devdaim6)
 
-## Contributing
-
-We welcome contributions! Please follow these steps:
-
-1. Fork the repository.
-
-2. Create a new branch (`git checkout -b feature/YourFeature`).
-
-3. Commit your changes (`git commit -m 'Add some feature'`).
-
-4. Push to the branch (`git push origin feature/YourFeature`).
-
-5. Open a pull request.
-
-
-## Contact
-
-For questions or support, please contact [Daim Zahoor](mailto:daimdev6@gmail.com).
